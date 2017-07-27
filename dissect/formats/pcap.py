@@ -47,9 +47,10 @@ PCAPNG_BLOCKTYPE_ENHANCED_PACKET            = 0x00000006
 PCAPNG_BLOCKTYPE_SECTION_HEADER             = 0x0a0d0d0a
 
 def pad4bytes(size):
-    if (size % 4) == 0:
+    pad = size % 4
+    if (pad) == 0:
         return size
-    return size + (4 -( size % 4))
+    return size + (4 -(pad))
 
 class PCAP_FILE_HEADER(VStruct):
     def __init__(self):
@@ -235,7 +236,7 @@ def iterPcapFile(fd, reuse=False):
     '''
     h = PCAP_FILE_HEADER()
     b = fd.read(len(h))
-    h.vsParse(b, writeback=True)
+    h.vsParse(b)
     fd.seek(0)
     if h.magic == PCAPNG_BLOCKTYPE_SECTION_HEADER:
         return _iterPcapNgFile(fd, reuse)
@@ -245,7 +246,7 @@ def iterPcapFile(fd, reuse=False):
 def _iterPcapFile(fd, reuse=False):
     h = PCAP_FILE_HEADER()
     b = fd.read(len(h))
-    h.vsParse(b, writeback=True)
+    h.vsParse(b)
 
     linktype = h.linktype
 
@@ -270,7 +271,7 @@ def _iterPcapFile(fd, reuse=False):
         if len(hdr) != pktsize:
             break
 
-        pkt.vsParse(hdr, writeback=True)
+        pkt.vsParse(hdr)
 
         b = fd.read(pkt.caplen)
 
@@ -281,7 +282,7 @@ def _iterPcapFile(fd, reuse=False):
             if len(b) < eIIsize:
                 continue
 
-            eII.vsParse(b, 0, writeback=True)
+            eII.vsParse(b, 0)
 
             if eII.etype not in (ds_inet.ethp.ipv4, ds_inet.ethp.vlan):
                 continue
@@ -300,7 +301,7 @@ def _iterPcapFile(fd, reuse=False):
         if (len(b) - offset) < ipv4size:
             continue
 
-        ipv4.vsParse(b, offset, writeback=True)
+        ipv4.vsParse(b, offset)
 
         # Make b *only* the IP datagram bytes...
         b = b[offset:offset+ipv4.totlen]
@@ -317,7 +318,7 @@ def _iterPcapFile(fd, reuse=False):
             if not reuse:
                 tcp_hdr = ds_inet.TCP()
 
-            tcp_hdr.vsParse(b, offset, writeback=True)
+            tcp_hdr.vsParse(b, offset)
             offset += len(tcp_hdr)
             pdata = b[offset:]
 
@@ -331,7 +332,7 @@ def _iterPcapFile(fd, reuse=False):
             if not reuse:
                 udp_hdr = ds_inet.UDP()
 
-            udp_hdr.vsParse(b, offset, writeback=True)
+            udp_hdr.vsParse(b, offset)
             offset += len(udp_hdr)
             pdata = b[offset:]
 
@@ -344,7 +345,7 @@ def _iterPcapFile(fd, reuse=False):
             if not reuse:
                 icmp_hdr = ds_inet.ICMP()
 
-            icmp_hdr.vsParse(b, offset, writeback=True)
+            icmp_hdr.vsParse(b, offset)
             offset += len(icmp_hdr)
             pdata = b[offset:]
 
@@ -365,7 +366,7 @@ def _iterPcapNgFile(fd, reuse=False):
     b0 = fd.read(len(header))
     fd.seek(curroff)
     while len(b0) == len(header):
-        header.vsParse(b0, writeback=True)
+        header.vsParse(b0)
         body = fd.read(header.blocksize)
         if header.blocktype == PCAPNG_BLOCKTYPE_SECTION_HEADER:
             shb = PCAPNG_SECTION_HEADER_BLOCK()
@@ -424,7 +425,7 @@ def _parsePcapngPacketBytes(linktype, pkt):
     if linktype == PCAP_LINKTYPE_ETHER:
         if len(pkt.data) < eIIsize:
             return None
-        eII.vsParse(pkt.data, 0, writeback=True)
+        eII.vsParse(pkt.data, 0)
         # No support for non-ip protocol yet...
         if eII.etype not in (ds_inet.ethp.ipv4, ds_inet.ethp.vlan):
             return None
@@ -436,7 +437,7 @@ def _parsePcapngPacketBytes(linktype, pkt):
     ipv4 = ds_inet.IPv4()
     if (len(pkt.data) - offset) < len(ipv4):
         return None
-    ipv4.vsParse(pkt.data, offset, writeback=True)
+    ipv4.vsParse(pkt.data, offset)
 
     # Make b *only* the IP datagram bytes...
     b = pkt.data[offset:offset+ipv4.totlen]
@@ -449,7 +450,7 @@ def _parsePcapngPacketBytes(linktype, pkt):
         if tsize < 20:
             return None
         tcp_hdr = ds_inet.TCP()
-        tcp_hdr.vsParse(b, offset, writeback=True)
+        tcp_hdr.vsParse(b, offset)
         offset += len(tcp_hdr)
         pdata = b[offset:]
         return pkt,ipv4,tcp_hdr,pdata
@@ -457,7 +458,7 @@ def _parsePcapngPacketBytes(linktype, pkt):
         if tsize < 8:
             return None
         udp_hdr = ds_inet.UDP()
-        udp_hdr.vsParse(b, offset, writeback=True)
+        udp_hdr.vsParse(b, offset)
         offset += len(udp_hdr)
         pdata = b[offset:]
         return pkt,ipv4,udp_hdr,pdata
@@ -465,7 +466,7 @@ def _parsePcapngPacketBytes(linktype, pkt):
         if tsize < 4:
             return None
         icmp_hdr = ds_inet.ICMP()
-        icmp_hdr.vsParse(b, offset, writeback=True)
+        icmp_hdr.vsParse(b, offset)
         offset += len(icmp_hdr)
         pdata = b[offset:]
         return pkt,ipv4,icmp_hdr,pdata
